@@ -345,6 +345,10 @@ EOF
   printf 'exec /usr/bin/dbus-launch --exit-with-session %s\n' "$session" | kasm_user_command tee -a "$xstartup" >/dev/null
   kasm_user_command chmod 0755 "$xstartup"
   sh -n "$xstartup"
+  # vncserver runs select-de.sh when this marker is missing, even if xstartup
+  # already exists. That helper needs a TTY and would replace this file.
+  # Do not call select-de.sh --select-de; touching the marker is enough.
+  kasm_user_command touch -- "$vncdir/.de-was-selected"
 
   # Per-user YAML takes precedence over /etc/kasmvnc/kasmvnc.yaml.
   # Default network.websocket_port=auto => 8443 + display number (:1 = 8444).
