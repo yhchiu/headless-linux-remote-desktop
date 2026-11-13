@@ -44,15 +44,25 @@ sandbox_use_fake_etc() {
 # Keep the real /usr/bin available through symlinks, then add files the
 # installers check for by absolute path. CI images do not ship a desktop.
 sandbox_overlay_usr_bin() {
-  local real bin_path bin_name
+  local real bin_path bin_name ln_bin ln_copy
+  # ln may live in /bin. Copy it before /usr/bin is hidden: on a merged
+  # /bin that hide would also remove /bin/ln, and a split /bin has no
+  # /usr/bin/ln to call after the mount.
+  ln_bin="$(type -P ln)"
+  if [[ -z "$ln_bin" ]]; then
+    echo 'sandbox: ln is not on PATH' >&2
+    exit 1
+  fi
+  ln_copy="$(mktemp)"
+  cp -L --no-preserve=ownership "$ln_bin" "$ln_copy"
+  chmod 0755 "$ln_copy"
   real="$(mktemp -d)"
   mount --bind /usr/bin "$real"
   mount -t tmpfs tmpfs /usr/bin
-  # /bin points at /usr/bin, so use the saved binaries for the copy itself.
   for bin_path in "$real"/*; do
     [[ -e "$bin_path" ]] || continue
     bin_name="${bin_path##*/}"
-    "$real/ln" -s "$bin_path" "/usr/bin/$bin_name"
+    "$ln_copy" -s "$bin_path" "/usr/bin/$bin_name"
   done
   sandbox_install_fake_desktop_bins
 }
