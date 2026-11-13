@@ -44,25 +44,27 @@ sandbox_use_fake_etc() {
 # Keep the real /usr/bin available through symlinks, then add files the
 # installers check for by absolute path. CI images do not ship a desktop.
 sandbox_overlay_usr_bin() {
-  local real bin_path bin_name ln_bin ln_copy
-  # ln may live in /bin. Copy it before /usr/bin is hidden: on a merged
-  # /bin that hide would also remove /bin/ln, and a split /bin has no
-  # /usr/bin/ln to call after the mount.
+  local real bin_path bin_name ln_bin ln_dir
+  # ln may live in /bin, which disappears on a merged layout once /usr/bin
+  # is covered. Ubuntu 26.04 rust-coreutils is one binary hardlinked under
+  # each utility name, and it refuses to run unless that name is exactly
+  # the utility (a mktemp name is rejected as "tmp"). Keep a private copy
+  # whose filename is ln.
   ln_bin="$(type -P ln)"
   if [[ -z "$ln_bin" ]]; then
     echo 'sandbox: ln is not on PATH' >&2
     exit 1
   fi
-  ln_copy="$(mktemp)"
-  cp -L --no-preserve=ownership "$ln_bin" "$ln_copy"
-  chmod 0755 "$ln_copy"
+  ln_dir="$(mktemp -d)"
+  cp -L --no-preserve=ownership "$ln_bin" "$ln_dir/ln"
+  chmod 0755 "$ln_dir/ln"
   real="$(mktemp -d)"
   mount --bind /usr/bin "$real"
   mount -t tmpfs tmpfs /usr/bin
   for bin_path in "$real"/*; do
     [[ -e "$bin_path" ]] || continue
     bin_name="${bin_path##*/}"
-    "$ln_copy" -s "$bin_path" "/usr/bin/$bin_name"
+    "$ln_dir/ln" -s "$bin_path" "/usr/bin/$bin_name"
   done
   sandbox_install_fake_desktop_bins
 }
