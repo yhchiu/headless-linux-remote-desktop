@@ -3,7 +3,7 @@
 # Uses the GNOME Remote Desktop SYSTEM service, not xrdp or Desktop Sharing.
 set -Eeuo pipefail
 
-VERSION='1.0.0'
+SCRIPT_VERSION='1.0.0'
 DESKTOP_PACKAGE='minimal'
 SKIP_CREDENTIALS=false
 STATUS_ONLY=false
@@ -62,7 +62,7 @@ while (($#)); do
     --desktop=*) DESKTOP_PACKAGE="${1#*=}"; DESKTOP_PACKAGE="${DESKTOP_PACKAGE,,}"; shift ;;
     --skip-credentials) SKIP_CREDENTIALS=true; shift ;;
     --status) STATUS_ONLY=true; shift ;;
-    -V|--version) printf '%s\n' "$VERSION"; exit 0 ;;
+    -V|--version) printf '%s\n' "$SCRIPT_VERSION"; exit 0 ;;
     -h|--help) usage; exit 0 ;;
     *) die "Unknown argument: $1 (use --help)." ;;
   esac
@@ -71,8 +71,17 @@ case "$DESKTOP_PACKAGE" in minimal|full) ;; *) die "Invalid --desktop: $DESKTOP_
 
 (( EUID == 0 )) || die 'Run as root using sudo.'
 [[ -r /etc/os-release ]] || die 'Cannot read /etc/os-release.'
-# shellcheck disable=SC1091
-. /etc/os-release
+# /etc/os-release assigns VERSION. Read the needed fields in a subshell so
+# that value cannot replace SCRIPT_VERSION.
+mapfile -t _os_release < <(
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  printf '%s\n' "${ID-}" "${VERSION_ID-}" "${PRETTY_NAME-}"
+)
+ID="${_os_release[0]:-}"
+VERSION_ID="${_os_release[1]:-}"
+PRETTY_NAME="${_os_release[2]:-}"
+unset _os_release
 [[ "${ID:-}" == ubuntu && "${VERSION_ID:-}" == 26.04 ]] || \
   die "Ubuntu 26.04 LTS is required; found ${PRETTY_NAME:-unknown}."
 command -v systemctl >/dev/null || die 'systemd is required.'

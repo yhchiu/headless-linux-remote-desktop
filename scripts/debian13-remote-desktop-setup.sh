@@ -3,7 +3,7 @@
 # Supported X11 desktops: xfce (default), mate, cinnamon, kde.
 set -Eeuo pipefail
 
-VERSION='1.1.0'
+SCRIPT_VERSION='1.1.0'
 DESKTOP='xfce'
 SERVER='xrdp'
 KASM_USER=''
@@ -82,7 +82,7 @@ while (($#)); do
     --user=*) KASM_USER="${1#*=}"; shift ;;
     --kasm-package=*) KASM_PACKAGE="${1#*=}"; shift ;;
     --kasm-sha256=*) KASM_SHA256="${1#*=}"; KASM_SHA256="${KASM_SHA256,,}"; shift ;;
-    -V|--version) printf '%s\n' "$VERSION"; exit 0 ;;
+    -V|--version) printf '%s\n' "$SCRIPT_VERSION"; exit 0 ;;
     -h|--help) usage; exit 0 ;;
     *) die "Unknown option: $1. Use --help for usage." ;;
   esac
@@ -123,8 +123,17 @@ case "$SERVER" in xrdp|kasmvnc) ;; *) die "Unsupported server: $SERVER (xrdp|kas
 
 (( EUID == 0 )) || die 'Run as root using sudo.'
 [[ -r /etc/os-release ]] || die 'Cannot read /etc/os-release.'
-# shellcheck disable=SC1091
-. /etc/os-release
+# /etc/os-release assigns VERSION. Read the needed fields in a subshell so
+# that value cannot replace SCRIPT_VERSION.
+mapfile -t _os_release < <(
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  printf '%s\n' "${ID-}" "${VERSION_ID-}" "${PRETTY_NAME-}"
+)
+ID="${_os_release[0]:-}"
+VERSION_ID="${_os_release[1]:-}"
+PRETTY_NAME="${_os_release[2]:-}"
+unset _os_release
 [[ "${ID:-}" == 'debian' && "${VERSION_ID:-}" == '13' ]] || \
   die "Debian 13 (Trixie) is required; detected ${PRETTY_NAME:-unknown OS}."
 command -v apt-get >/dev/null || die 'apt-get not found.'
@@ -182,7 +191,7 @@ install_xrdp() {
   fi
   cat > "$LAUNCHER" <<EOF
 #!/bin/sh
-# Managed by debian13-remote-desktop-setup.sh v$VERSION.
+# Managed by debian13-remote-desktop-setup.sh v$SCRIPT_VERSION.
 # xrdp users share a default X11 desktop: $DESKTOP.
 [ ! -r /etc/profile ] || . /etc/profile
 [ ! -r "\$HOME/.profile" ] || . "\$HOME/.profile"
@@ -322,7 +331,7 @@ install_kasmvnc() {
   # Standalone Xvnc session, independent from xrdp's /etc/X11/Xsession.
   kasm_user_command tee "$xstartup" >/dev/null <<EOF
 #!/bin/sh
-# $marker v$VERSION (desktop: $DESKTOP).
+# $marker v$SCRIPT_VERSION (desktop: $DESKTOP).
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
 unset WAYLAND_DISPLAY
@@ -340,7 +349,7 @@ EOF
   # Per-user YAML takes precedence over /etc/kasmvnc/kasmvnc.yaml.
   # Default network.websocket_port=auto => 8443 + display number (:1 = 8444).
   kasm_user_command tee "$yaml" >/dev/null <<EOF
-# $marker v$VERSION.
+# $marker v$SCRIPT_VERSION.
 network:
   protocol: http
   interface: 0.0.0.0

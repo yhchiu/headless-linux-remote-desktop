@@ -32,4 +32,9 @@ for server in invalid; do
     exit 1
   fi
 done
-printf 'All smoke checks passed. No system changes were made.\n'
+shopt -s nullglob
+for regression in tests/regression/*.sh; do
+  echo "Running $regression"
+  bash "$regression"
+done
+printf 'All smoke and regression checks passed. No system changes were made.\n'

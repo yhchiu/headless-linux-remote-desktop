@@ -177,11 +177,14 @@ headless-linux-remote-desktop/
 ├── Makefile
 ├── .gitignore
 ├── .github/workflows/check.yml
+├── docs/plans/
 ├── scripts/
 │   ├── debian13-remote-desktop-setup.sh
 │   └── ubuntu2604-gnome-rdp-setup.sh
 └── tests/
-    └── run.sh
+    ├── run.sh
+    ├── lib/sandbox.sh
+    └── regression/
 ```
 
 ## Development and verification
@@ -190,7 +193,7 @@ headless-linux-remote-desktop/
 make check
 ```
 
-This performs Bash syntax checks and non-destructive CLI smoke tests. The GitHub Actions workflow runs the same checks. Actual installation and desktop-login behavior require **real Debian 13 and Ubuntu 26.04 VMs** with network access; they are not covered by these smoke tests.
+This performs Bash syntax checks, non-destructive CLI smoke tests, and sandbox regression tests. The regression tests execute the installers inside a throwaway mount namespace with stubbed package and service commands. They do not install packages or change the host. The GitHub Actions workflow runs the same checks. A real desktop login still requires **Debian 13 and Ubuntu 26.04 VMs** with network access.
 
 ## License
 
