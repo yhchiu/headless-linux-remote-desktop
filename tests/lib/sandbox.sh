@@ -43,38 +43,51 @@ sandbox_use_fake_etc() {
 
 # Keep the real /usr/bin available through symlinks, then add files the
 # installers check for by absolute path. CI images do not ship a desktop.
-sandbox_overlay_usr_bin() {
-  local real bin_path bin_name ln_bin ln_dir
-  # ln may live in /bin, which disappears on a merged layout once /usr/bin
-  # is covered. Ubuntu 26.04 rust-coreutils is one binary hardlinked under
-  # each utility name, and it refuses to run unless that name is exactly
-  # the utility (a mktemp name is rejected as "tmp"). Keep a private copy
-  # whose filename is ln.
-  ln_bin="$(type -P ln)"
-  if [[ -z "$ln_bin" ]]; then
-    echo 'sandbox: ln is not on PATH' >&2
+# Copy one utility to a private file of the same name. Ubuntu 26.04
+# rust-coreutils rejects a renamed copy, so the filename must stay put.
+sandbox_save_util() {
+  local util="$1" dest_dir="$2" bin
+  bin="$(type -P "$util")" || {
+    echo "sandbox: $util is not on PATH" >&2
     exit 1
-  fi
-  ln_dir="$(mktemp -d)"
-  cp -L --no-preserve=ownership "$ln_bin" "$ln_dir/ln"
-  chmod 0755 "$ln_dir/ln"
+  }
+  cp -L --no-preserve=ownership "$bin" "$dest_dir/$util"
+  chmod 0755 "$dest_dir/$util"
+}
+
+sandbox_overlay_usr_bin() {
+  local real bin_path bin_name target
+  SANDBOX_TOOL_DIR="$(mktemp -d)"
+  sandbox_save_util ln "$SANDBOX_TOOL_DIR"
+  sandbox_save_util readlink "$SANDBOX_TOOL_DIR"
+  sandbox_save_util rm "$SANDBOX_TOOL_DIR"
+  sandbox_save_util chmod "$SANDBOX_TOOL_DIR"
   real="$(mktemp -d)"
   mount --bind /usr/bin "$real"
   mount -t tmpfs tmpfs /usr/bin
+  # Relative symlinks (../lib/...) resolve against the path used to reach
+  # them. Recreate those links unchanged. Hardlinked utilities must point
+  # at the saved directory entry so the filename still matches the utility.
   for bin_path in "$real"/*; do
-    [[ -e "$bin_path" ]] || continue
+    [[ -e "$bin_path" || -L "$bin_path" ]] || continue
     bin_name="${bin_path##*/}"
-    "$ln_dir/ln" -s "$bin_path" "/usr/bin/$bin_name"
+    if [[ -L "$bin_path" ]]; then
+      target="$("$SANDBOX_TOOL_DIR/readlink" "$bin_path")"
+    else
+      target="$bin_path"
+    fi
+    "$SANDBOX_TOOL_DIR/ln" -s "$target" "/usr/bin/$bin_name"
   done
+  hash -r
   sandbox_install_fake_desktop_bins
 }
 
 sandbox_install_fake_desktop_bins() {
   local name
   for name in startxfce4 mate-session cinnamon-session-cinnamon startplasma-x11 dbus-launch; do
-    rm -f "/usr/bin/$name"
+    "$SANDBOX_TOOL_DIR/rm" -f "/usr/bin/$name"
     printf '%s\n' '#!/bin/sh' 'exit 0' > "/usr/bin/$name"
-    chmod 0755 "/usr/bin/$name"
+    "$SANDBOX_TOOL_DIR/chmod" 0755 "/usr/bin/$name"
   done
 }
 
