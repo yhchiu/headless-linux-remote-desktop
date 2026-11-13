@@ -101,7 +101,7 @@ To rerun the setup without rotating previously configured gateway credentials:
 sudo bash scripts/ubuntu2604-gnome-rdp-setup.sh --skip-credentials
 ```
 
-**Important:** `--skip-credentials` does not create or validate gateway credentials. Use it only after successful setup. To change the gateway credentials, run the installer without that flag. The script reuses existing TLS certificate/key files and does not automatically renew them. GDM is enabled and the default systemd target is set to `graphical.target`; that is necessary for login services even on a monitorless VM. A fresh server installation should be rebooted after setup.
+**Important:** `--skip-credentials` does not create or validate gateway credentials. Use it only after successful setup. To change the gateway credentials, run the installer without that flag. The installer then restarts `gnome-remote-desktop` so the running daemon loads the new gateway login. Current RDP connections are disconnected. The script reuses existing TLS certificate/key files and does not automatically renew them. GDM is enabled and the default systemd target is set to `graphical.target`; that is necessary for login services even on a monitorless VM. A fresh server installation should be rebooted after setup.
 
 For upstream reference, see [Canonical's Ubuntu 26.04 RDP guide](https://ubuntu.com/aws/docs/aws-how-to/instances/launch-ubuntu-desktop/) and [GNOME's Remote Desktop configuration](https://github.com/GNOME/gnome-remote-desktop/blob/main/docs/configuration.md).
 

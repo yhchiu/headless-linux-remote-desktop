@@ -171,6 +171,9 @@ grdctl --system rdp set-tls-key "$TLS_KEY"
 grdctl --system rdp set-tls-cert "$TLS_CERT"
 grdctl --system rdp set-auth-methods credentials
 
+# True only when this run wrote a new gateway login. --skip-credentials
+# must not bounce a daemon that is still using the saved password.
+credentials_updated=false
 if ! "$SKIP_CREDENTIALS"; then
   [[ -t 0 || -t 2 ]] || die 'Gateway credential setup requires an interactive TTY.'
   [[ -r /dev/tty ]] || die 'No controlling TTY available for gateway credential setup.'
@@ -179,6 +182,7 @@ if ! "$SKIP_CREDENTIALS"; then
   # Do not place the password in process arguments, environment, shell history,
   # or a temporary file. GNOME 50 grdctl prompts interactively via stdin.
   grdctl --system rdp set-credentials </dev/tty
+  credentials_updated=true
 else
   warn 'Skipping gateway credential setup; existing credentials must already be configured.'
 fi
@@ -191,6 +195,12 @@ log 'Enabling GDM and GNOME Remote Desktop ...'
 systemctl set-default graphical.target
 systemctl enable --now gdm3.service
 systemctl enable --now gnome-remote-desktop.service
+if "$credentials_updated"; then
+  # grdctl writes the gateway password to disk. A daemon that is already
+  # running keeps the previous password in memory until it is restarted.
+  log 'Restarting GNOME Remote Desktop so the new gateway credentials take effect ...'
+  systemctl restart gnome-remote-desktop.service
+fi
 systemctl is-active --quiet gdm3.service || die 'GDM is not running.'
 systemctl is-active --quiet gnome-remote-desktop.service || die 'GNOME Remote Desktop is not running.'
 
